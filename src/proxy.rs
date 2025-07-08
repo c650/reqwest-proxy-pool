@@ -1,4 +1,5 @@
 //! Proxy representation and status.
+use regex::Regex;
 
 use governor::{clock::DefaultClock, middleware::NoOpMiddleware, state::{InMemoryState, NotKeyed}, Quota, RateLimiter};
 use std::num::NonZeroU32;
@@ -21,6 +22,8 @@ pub enum ProxyStatus {
 pub struct Proxy {
     /// The URL of the proxy (e.g. "socks5://127.0.0.1:1080").
     pub url: String,
+    /// Proxy creds
+    pub creds: Option<(String, String)>,
     /// The current status of the proxy.
     pub status: ProxyStatus,
     /// Number of successful requests made through this proxy.
@@ -37,13 +40,31 @@ pub struct Proxy {
 
 impl Proxy {
     /// Create a new proxy with the given URL and rate limit.
-    pub fn new(url: String, max_rps: f64) -> Self {
+    pub fn new(input_url: String, max_rps: f64) -> Self {
         // Create a rate limiter for this proxy
         let quota = Quota::per_second(NonZeroU32::new(max_rps.ceil() as u32).unwrap_or(NonZeroU32::new(1).unwrap()));
         let limiter = Arc::new(RateLimiter::direct(quota));
-        
+
+        // (protocol)://(user):(pass)@(host:port)
+        let creds_regex = Regex::new(r"^([^:]+)://([^:]+):([^@]+)@(.*)$").unwrap();
+        let (url, creds): (String, Option<(String, String)>) = creds_regex
+            .captures(&input_url)
+            .map(|capture| {
+                let creds = Some((
+                    capture.get(2).unwrap().as_str().to_string(),
+                    capture.get(3).unwrap().as_str().to_string(),
+                ));
+
+                (
+                    format!("{}://{}", capture.get(1).unwrap().as_str(), capture.get(4).unwrap().as_str()),
+                    creds,
+                )
+            })
+            .unwrap_or((input_url, None));
+
         Self {
             url,
+            creds,
             status: ProxyStatus::Unknown,
             success_count: 0,
             failure_count: 0,
@@ -52,12 +73,16 @@ impl Proxy {
             limiter,
         }
     }
-    
+
     /// Convert the proxy URL to a reqwest::Proxy.
     pub fn to_reqwest_proxy(&self) -> Result<reqwest::Proxy, reqwest::Error> {
-        reqwest::Proxy::all(&self.url)
+        if let Some((user, pass)) = &self.creds {
+            reqwest::Proxy::all(&self.url).map(|p| p.basic_auth(&user, &pass))
+        } else {
+            reqwest::Proxy::all(&self.url)
+        }
     }
-    
+
     /// Calculate the success rate of this proxy.
     pub fn success_rate(&self) -> f64 {
         let total = self.success_count + self.failure_count;
