@@ -25,11 +25,11 @@ impl ProxyPoolMiddleware {
             Ok(pool) => {
                 let (total, healthy) = pool.get_stats();
                 info!("Proxy pool initialized with {}/{} healthy proxies", healthy, total);
-                
+
                 if healthy == 0 {
                     warn!("No healthy proxies available in pool");
                 }
-                
+
                 Ok(Self { pool })
             }
             Err(e) => {
@@ -49,7 +49,7 @@ impl Middleware for ProxyPoolMiddleware {
     ) -> Result<reqwest::Response> {
         let max_retries = self.pool.config.retry_count;
         let mut retry_count = 0;
-        
+
         loop {
             // Try to get a healthy proxy
             match self.pool.get_proxy() {
@@ -63,17 +63,17 @@ impl Middleware for ProxyPoolMiddleware {
 
                     let proxy_url = proxy.url.clone();
                     info!("Using proxy: {} (attempt {})", proxy_url, retry_count + 1);
-                    
+
                     // Apply rate limiting
                     proxy.limiter.until_ready().await;
-                    
+
                     // Create a new client with the selected proxy
                     let reqwest_proxy = match proxy.to_reqwest_proxy() {
                         Ok(p) => p,
                         Err(e) => {
                             warn!("Failed to create proxy from {}: {}", proxy_url, e);
                             self.pool.report_proxy_failure(&proxy_url);
-                            
+
                             // Try another proxy if available
                             retry_count += 1;
                             if retry_count > max_retries {
@@ -82,7 +82,7 @@ impl Middleware for ProxyPoolMiddleware {
                             continue;
                         }
                     };
-                    
+
                     // Build a new client with the proxy
                     let client = match reqwest::Client::builder()
                         .proxy(reqwest_proxy)
@@ -99,7 +99,7 @@ impl Middleware for ProxyPoolMiddleware {
                             continue;
                         }
                     };
-                    
+
                     // Execute the request and pass extensions
                     match client.execute(proxied_request).await {
                         Ok(response) => {
@@ -109,10 +109,10 @@ impl Middleware for ProxyPoolMiddleware {
                         }
                         Err(err) => {
                             // Request failed
-                            warn!("Request failed with proxy {} (attempt {}): {}", 
+                            warn!("Request failed with proxy {} (attempt {}): {}",
                                 proxy_url, retry_count + 1, err);
                             self.pool.report_proxy_failure(&proxy_url);
-                            
+
                             retry_count += 1;
                             if retry_count > max_retries {
                                 return Err(Error::Reqwest(err));
