@@ -11,7 +11,7 @@ proxy pool middleware implementation for
 
 ### ✨ Comprehensive Proxy Support
 
-- Automatic parsing of free SOCKS5 proxies from multiple sources
+- Automatic parsing of free SOCKS5 or HTTP(s) proxies from multiple sources
 
 - Built-in health checking with customizable timeout and test URL
 

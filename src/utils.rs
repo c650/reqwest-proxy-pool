@@ -19,13 +19,14 @@ pub(crate) async fn fetch_proxies_from_source(source: &str) -> Result<Vec<String
     }
 }
 
-/// Parse the text content to extract SOCKS5 proxy URLs.
+/// Parse the text content to extract SOCKS5 or HTTP(s) proxy URLs.
 pub(crate) fn parse_proxy_list(content: &str) -> Vec<String> {
     content
         .lines()
         .filter_map(|line| {
             let line = line.trim();
-            if line.starts_with("socks5://") {
+            if line.starts_with("socks5://")
+            || line.starts_with("http://") || line.starts_with("https://") {
                 Some(line.to_string())
             } else if line.contains(':') && !line.starts_with('#') && !line.is_empty() {
                 // Try to parse IP:PORT format
