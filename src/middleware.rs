@@ -124,7 +124,14 @@ impl Middleware for ProxyPoolMiddleware {
                 Err(_) => {
                     // No healthy proxies available
                     let (total, healthy) = self.pool.get_stats();
-                    warn!("No proxy available. Total: {}, Healthy: {}", total, healthy);
+
+                    if self.pool.config.fall_back_to_no_proxy {
+                        warn!("No proxy available. Falling back to no proxy. Total: {}, Healthy: {}", total, healthy);
+                        return _next.clone().run(req, _extensions).await;
+                    } else {
+                        warn!("No proxy available. Total: {}, Healthy: {}", total, healthy);
+                    }
+
                     return Err(Error::Middleware(anyhow!(NoProxyAvailable)));
                 }
             }

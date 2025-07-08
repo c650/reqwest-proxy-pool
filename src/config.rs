@@ -34,6 +34,8 @@ pub struct ProxyPoolConfig {
     pub selection_strategy: ProxySelectionStrategy,
     /// Maximum requests per second per proxy.
     pub max_requests_per_second: f64,
+    /// fall back to not using any proxy when there are no healthy proxies in the pool.
+    pub fall_back_to_no_proxy: bool,
 }
 
 impl ProxyPoolConfig {
@@ -53,6 +55,7 @@ pub struct ProxyPoolConfigBuilder {
     retry_count: Option<usize>,
     selection_strategy: Option<ProxySelectionStrategy>,
     max_requests_per_second: Option<f64>,
+    fall_back_to_no_proxy: bool,
 }
 
 impl ProxyPoolConfigBuilder {
@@ -67,6 +70,7 @@ impl ProxyPoolConfigBuilder {
             retry_count: None,
             selection_strategy: None,
             max_requests_per_second: None,
+            fall_back_to_no_proxy: false,
         }
     }
 
@@ -118,6 +122,11 @@ impl ProxyPoolConfigBuilder {
         self
     }
 
+    pub fn fall_back_to_no_proxy(mut self, val: bool) -> Self {
+        self.fall_back_to_no_proxy = val;
+        self
+    }
+
     /// Build the configuration.
     pub fn build(self) -> ProxyPoolConfig {
         ProxyPoolConfig {
@@ -129,6 +138,7 @@ impl ProxyPoolConfigBuilder {
             retry_count: self.retry_count.unwrap_or(3),
             selection_strategy: self.selection_strategy.unwrap_or(ProxySelectionStrategy::FastestResponse),
             max_requests_per_second: self.max_requests_per_second.unwrap_or(5.0),
+            fall_back_to_no_proxy : self.fall_back_to_no_proxy
         }
     }
 }
